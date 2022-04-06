@@ -150,53 +150,86 @@ print("numba2: ", np.mean(t_numba2))
 from numba import jit
 import numpy as np
 import time
+from scipy.stats import mvn
+from scipy.spatial.distance import cdist
 
-N = 10000
-N1 = 100
-N2 = 100
-x = np.arange(N).reshape(N1, N2)
+N = 50
+x = np.linspace(0, 1, N)
+y = np.linspace(0, 1, N)
+xx, yy = np.meshgrid(x, y)
+xv = xx.reshape(-1, 1)
+yv = yy.reshape(-1, 1)
+grid = np.hstack((xv, yv))
+distmatrix = cdist(grid, grid)
+eta = 4.5 / .6
+Sigma = 1 ** 2 * (1 + eta * distmatrix) * np.exp(-eta * distmatrix)
+plt.imshow(Sigma)
+plt.colorbar()
+plt.show()
 
-@jit(nopython=True)
-def go_fast(a): # Function is compiled and runs in machine code
-    trace = 0.0
-    for i in range(a.shape[0]):
-        trace += np.tanh(a[i, i])
-    return a + trace
+mu = np.abs(np.linalg.cholesky(Sigma) @ np.random.randn(Sigma.shape[0]).reshape(-1, 1))
+
+plt.scatter(xv, yv, c=mu, s=120, cmap="RdBu")
+plt.colorbar()
+plt.show()
+
+
+#%%
+
+Niter = 30
+
+@jit
+# @jit(nopython=True)
+def eibv_numba(threshold, mu, Sigma): # Function is compiled and runs in machine code
+    eibv = 0
+    for i in range(len(mu)):
+        eibv += mvn.mvnun(-np.inf, threshold, mu[i], Sigma[i, i])[0] - \
+                mvn.mvnun(-np.inf, threshold, mu[i], Sigma[i, i])[0] ** 2
+    return eibv
+
 
 # DO NOT REPORT THIS... COMPILATION TIME IS INCLUDED IN THE EXECUTION TIME!
 start = time.time()
-go_fast(x)
+eibv_numba(1, mu, Sigma)
 end = time.time()
 print("Elapsed (with compilation) = %s" % (end - start))
+
 
 # NOW THE FUNCTION IS COMPILED, RE-TIME IT EXECUTING FROM CACHE
 t_numba = []
 for i in range(30):
     start = time.time()
-    go_fast(x)
+    eibv_numba(1, mu, Sigma)
     end = time.time()
     t_numba.append(end - start)
 
 print("numba = %s" % (np.mean(t_numba)))
 
 
-def go_slow(a): # Function is compiled and runs in machine code
-    trace = 0.0
-    for i in range(a.shape[0]):
-        trace += np.tanh(a[i, i])
-    return a + trace
+def eibv_basic(threshold, mu, Sigma): # Function is compiled and runs in machine code
+    eibv = np.zeros_like(mu)
+    for i in range(len(eibv)):
+        eibv[i] = mvn.mvnun(-np.inf, threshold, mu[i], Sigma[i, i])[0] - \
+                  mvn.mvnun(-np.inf, threshold, mu[i], Sigma[i, i])[0] ** 2
+    return eibv
+
+    # return np.linalg.solve(a, np.ones([a.shape[0], 1]))
+    # trace = 0.0
+    # for i in range(a.shape[0]):
+    #     trace += np.tanh(a[i, i])
+    # return a + trace
 
 t_basic = []
 for i in range(Niter):
     start = time.time()
-    go_slow(x)
+    eibv_basic(1, mu, Sigma)
     end = time.time()
     t_basic.append(end - start)
 
 print("basic = %s" % (np.mean(t_basic)))
 
-plt.plot(t_numba)
-plt.plot(t_basic)
-
+plt.plot(t_numba, label='numba')
+plt.plot(t_basic, label='basic')
+plt.legend()
 plt.show()
 
