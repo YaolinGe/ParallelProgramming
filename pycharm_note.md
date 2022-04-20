@@ -1,0 +1,23 @@
+# PyCharm notes
+
+- cmd + shift + A --> search for action
+- double `shift` can search everywhere
+- `opt + enter` can show potential improvements
+- `opt + upper arrow` can select certain part of command lines
+- `cmd + d` duplicate the lines
+- `cmd + backspace` delete duplicated lines
+- `opt + shift + upper` move lines
+- `cmd + shift + upper` move methods / functions
+- `cmd + -` collapse the entire code fragment
+- `cmd + =` expand the entire code fragment
+- `cmd + shift + -` collapse all methods
+- `cmd + shift + =` expand all regions
+- `cmd + opt + T` wrap something
+- `cmd + shift + fn + backspace` unwraps something
+- `ctrl + G` select the occurence
+- `ctrl + shift + G` deselect the last occurence
+- `ctrl + cmd + G` selects all the occurence in the file
+- `ctrl + space + fn` to activate basic completion
+- `shift + ctrl + space + fn` to activate smart completion, might take longer
+- postfix completion needs more care
+- `f"test {my_car} string"`
