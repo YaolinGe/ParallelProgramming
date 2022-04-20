@@ -9,6 +9,30 @@ import time
 from scipy.stats import norm
 from scipy.spatial.distance import cdist
 
+# == setup
+N = 10
+# x = np.linspace(0, 1, N)
+# y = np.linspace(0, 1, N)
+# xx, yy = np.meshgrid(x, y)
+# xv = xx.reshape(-1, 1)
+# yv = yy.reshape(-1, 1)
+# grid = np.hstack((xv, yv))
+# distmatrix = cdist(grid, grid)
+# eta = 4.5 / .3
+# NUGGET = .3
+# tau = np.sqrt(NUGGET)
+# R = np.diagflat(tau).reshape(-1, 1)
+# Sigma = .2 ** 2 * (1 + eta * distmatrix) * np.exp(-eta * distmatrix)
+# mu_prior = ((xv - 1.) ** 2 + (yv - .5) ** 2).reshape(-1, 1)
+
+
+# mu = (mu_prior + np.abs(np.linalg.cholesky(Sigma) @ np.random.randn(Sigma.shape[0]).reshape(-1, 1))).astype(np.float32)
+# Variance = np.diag(Sigma).reshape(-1, 1).astype(np.float32)
+# threshold = np.ones_like(mu).astype(np.float32) * .5
+
+# plt.scatter(xv, yv, c=mu, cmap="BrBG")
+# plt.colorbar()
+# plt.show()
 
 
 # == setup
@@ -37,8 +61,8 @@ queue = cl.CommandQueue(context)  # Instantiate a Queue
 
 mf = cl.mem_flags
 mean = cl.Buffer(context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=mu)
-vari = cl.Buffer(context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=Variance)
-thres = cl.Buffer(context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=threshold)
+# vari = cl.Buffer(context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=Variance)
+# thres = cl.Buffer(context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=threshold)
 eibv = cl.Buffer(context, mf.WRITE_ONLY, mu.nbytes)
 
 # program = cl.Program(context, """
@@ -67,13 +91,14 @@ Niter = 10
 t_gpu = []
 t_basic = []
 
+
 print("=" * 60)
 print("Start of GPU")
 
 for i in range(Niter):
     eibv_np = np.empty_like(mu)
     t1 = time.time()
-    program.eibv(queue, mu.shape, None, mean, vari, thres, eibv)  # Enqueue the program for execution and store the result in c
+    program.eibv(queue, mu.shape, None, mean, eibv)  # Enqueue the program for execution and store the result in c
     cl._enqueue_read_buffer(queue, eibv, eibv_np).wait()
     EIBV = np.sum(eibv_np)
     t2 = time.time()
@@ -151,15 +176,57 @@ print("Error from GPU: ", np.sum(eibv_np - eibv_slow))
 print("Error from CPU parallel: ", np.sum(eibv_fast - eibv_slow))
 # plt.plot(eibv_np, label='gpu')
 # plt.plot(a2, label='basic')
-# # plt.plot(a3, label='numba')
+# plt.plot(a3, label='numba')
 # plt.legend()
 # plt.show()
 
-# %%
-# plt.subplot(121)
-# plt.scatter(xv, yv, c=EIBV, s=150, cmap='BrBG')
+plt.subplot(131)
+plt.plot(eibv_np, label='gpu')
+plt.legend()
+plt.subplot(132)
+plt.plot(a2, label='basic')
+plt.legend()
+plt.subplot(133)
+plt.plot(a3, label='cpu-paral')
+# plt.scatter(xv, yv, c=a2, s=150, cmap='BrBG')
 # plt.colorbar()
 # plt.subplot(122)
 # plt.scatter(xv, yv, c=a2, s=150, cmap='BrBG')
 # plt.colorbar()
-# plt.show()
+plt.legend()
+plt.show()
+
+
+
+# import pyviennacl as p
+# import numpy as np
+# import random
+#
+# # We want a square N x N system.
+# N = 5
+#
+# # Create a NumPy matrix with float32 precision to hold the data on the host.
+# # Firstly, we create an empty matrix, then fill the upper triangle with values.
+# A = np.zeros((N, N), dtype = np.float32)
+#
+# for i in range(N):
+#     for j in range(N):
+#         if j >= i:
+#             A[i, j] = np.float32(random.randint(0,1000) / 100.0)
+#
+# # Transfer the system matrix to the compute device
+# A = p.Matrix(A)
+#
+# print("A is\n%s" % A)
+#
+# # Create a right-hand-side vector on the host with random elements
+# # and transfer it to the compute device
+# b = p.Vector(np.random.rand(N).astype(np.float32))
+#
+# print("b is %s" % b)
+#
+# # Solve the system; note the choice of tag to denote an upper triangular system
+# x = p.solve(A, b, p.upper_tag())
+#
+# # Copy the solution from the device to host and display it
+# print("Solution of Ax = b for x:\n%s" % x)
