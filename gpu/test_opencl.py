@@ -35,9 +35,24 @@ N = 1000
 # plt.show()
 
 
+# == setup
+N = 100
+# x = np.linspace(0, 1, N)
+# y = np.linspace(0, 1, N)
+# xx, yy = np.meshgrid(x, y)
+# xv = xx.reshape(-1, 1)
+# yv = yy.reshape(-1, 1)
+# grid = np.hstack((xv, yv))
+# distmatrix = cdist(grid, grid)
+# eta = 4.5 / .3
+# Sigma = 1 ** 2 * (1 + eta * distmatrix) * np.exp(-eta * distmatrix)
+# mu = np.abs(np.linalg.cholesky(Sigma) @ np.random.randn(Sigma.shape[0]).reshape(-1, 1)).astype(np.float32)
+# Variance = np.diag(Sigma).reshape(-1, 1).astype(np.float32)
+# threshold = np.ones_like(mu).astype(np.float32) * .5
+
 mu = np.zeros([N, 1]).astype(np.float32)
-# Variance = np.ones_like(mu).astype(np.float32)
-# threshold = np.linspace(-3, 3, N).astype(np.float32)
+Variance = np.ones_like(mu).astype(np.float32)
+threshold = np.linspace(-3, 3, N).astype(np.float32)
 # ==
 
 print("hello")
@@ -61,16 +76,18 @@ eibv = cl.Buffer(context, mf.WRITE_ONLY, mu.nbytes)
 # """).build()  # Create the OpenCL program
 
 program = cl.Program(context, """
-__kernel void eibv(__global const float *mean,  __global float *eibv)
+__kernel void eibv(__global const float *mean, __global const float *vari, __global const float *thres, __global float *eibv)
 {
   int i = get_global_id(0);
   eibv[i] = 1.0 / mean[i];
 }
 """).build()  # Create the OpenCL program
-# float temp = (thres[i] - mean[i]) / sqrt(2.0) / vari[i];
-# float cdf = .5 * (1 + erf(temp));
 
-Niter = 30
+# float temp = (thres[i] - mean[i]) / sqrt(2.0) / vari[i];
+#   float cdf = .5 * (1 + erf(temp));
+
+
+Niter = 10
 t_gpu = []
 t_basic = []
 
@@ -90,32 +107,22 @@ print("GPU taks: ", np.mean(t_gpu))
 print("End of GPU")
 print("=" * 60)
 
-
-def eibv_slow(mu): # Function is compiled and runs in machine code
+def eibv_slow(mu, Sigma, threshold): # Function is compiled and runs in machine code
+    # eibv = np.zeros_like(mu)
+    # eibv = 0
+    # for i in range(len(mu)):
+    #     temp_cdf = norm.cdf(threshold[i], mu[i], Sigma[i])
+    #     eibv += temp_cdf * (1 - temp_cdf)
+    # return eibv
     eibv = np.zeros_like(mu)
     for i in range(len(mu)):
         eibv[i] = 1 / mu[i]
         # eibv[i] = norm.cdf(threshold[i], mu[i], Sigma[i])
     return eibv
 
-    # # EIBV = np.zeros_like(mu)
-    # # for i in range(len(mu)):
-    #     # print(i)
-    #     # F = np.zeros([1, len(mu)])
-    #     # F[0, i] = True
-    #     # Sigma_upd = Sigma - Sigma @ F.T @ np.linalg.solve(F @ Sigma @ F.T + R, F @ Sigma)
-    # eibv = 0
-    # for j in range(len(mu)):
-    #     temp_cdf = norm.cdf(threshold[j], mu[j], Sigma[j])
-    #     eibv = temp_cdf * (1 - temp_cdf)
-    # return eibv
-    #     # EIBV[i] = eibv
-    # # return EIBV
-
-
 @jit
 # @register_callable(double(double))
-def eibv_fast(mu): # Function is compiled and runs in machine code
+def eibv_fast(mu, Sigma, threshold): # Function is compiled and runs in machine code
     eibv = np.zeros_like(mu)
     for i in range(len(mu)):
         eibv[i] = 1 / mu[i]
@@ -123,12 +130,12 @@ def eibv_fast(mu): # Function is compiled and runs in machine code
     return eibv
 print("=" * 60)
 print("Start numba")
-eibv_fast(mu)
+eibv_fast(mu, Variance, threshold)
 
 t_numba = []
 for i in range(Niter):
     t1 = time.time()
-    a3 = eibv_fast(mu)
+    eibv_fast = eibv_fast(mu, Variance, threshold)
     t2 = time.time()
     t_numba.append(t2 - t1)
 print("numba taks: ", np.mean(t_numba))
@@ -142,7 +149,7 @@ print("Start basic")
 
 for i in range(Niter):
     t1 = time.time()
-    a2 = eibv_slow(mu)
+    eibv_slow = eibv_slow(mu, Variance, threshold)
     t2 = time.time()
     t_basic.append(t2 - t1)
 
@@ -165,6 +172,8 @@ print("Numba Speed up: ", np.mean(t_basic) / np.mean(t_numba))
 # print("EIBV from GPU: ", EIBV)
 # print("EIBV from basic: ", a2)
 
+print("Error from GPU: ", np.sum(eibv_np - eibv_slow))
+print("Error from CPU parallel: ", np.sum(eibv_fast - eibv_slow))
 # plt.plot(eibv_np, label='gpu')
 # plt.plot(a2, label='basic')
 # plt.plot(a3, label='numba')
@@ -221,7 +230,3 @@ plt.show()
 #
 # # Copy the solution from the device to host and display it
 # print("Solution of Ax = b for x:\n%s" % x)
-
-
-
-
