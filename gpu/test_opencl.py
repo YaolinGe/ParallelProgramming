@@ -10,7 +10,7 @@ from scipy.stats import norm
 from scipy.spatial.distance import cdist
 
 # == setup
-N = 10
+N = 1000
 # x = np.linspace(0, 1, N)
 # y = np.linspace(0, 1, N)
 # xx, yy = np.meshgrid(x, y)
